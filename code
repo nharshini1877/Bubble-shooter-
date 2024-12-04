@@ -1,0 +1,836 @@
+import math, pygame, sys, copy, random
+import pygame.gfxdraw
+from pygame.locals import *
+
+
+pygame.init()
+
+FPS          = 200
+WINDOWWIDTH  = 720
+WINDOWHEIGHT = 480
+TEXTHEIGHT   = 20
+BUBBLERADIUS = 20
+BUBBLEWIDTH  = BUBBLERADIUS * 2
+BUBBLELAYERS = 5
+BUBBLEYADJUST = 5
+STARTX = WINDOWWIDTH / 2
+STARTY = WINDOWHEIGHT - 27
+ARRAYWIDTH = 20
+ARRAYHEIGHT = 14
+
+RIGHT = 'right'
+LEFT  = 'left'
+BLANK = '.'
+
+
+
+## COLORS ##
+#            R    G    B
+GRAY     = (100, 100, 100)
+NAVYBLUE = ( 60,  60, 100)
+WHITE    = (255, 255, 255)
+RED      = (255,   0,   0)
+GREEN    = (  0, 255,   0)
+BLUE     = (  0,   0, 255)
+YELLOW   = (255, 255,   0)
+ORANGE   = (255, 128,   0)
+PINK   = (255,   0, 255)
+CYAN     = (  0, 255, 255)
+BLACK    = (  0,   0,   0)
+COMBLUE  = (233, 232, 255)
+BROWN    = (139,35,35)
+
+BGCOLOR    = BLACK
+COLORLIST  = [RED, GREEN, BLUE, YELLOW, ORANGE, PINK, CYAN]
+
+window = pygame.display.set_mode((WINDOWWIDTH,WINDOWHEIGHT))
+bg_img = pygame.image.load('back2.png')
+bg_img = pygame.transform.scale(bg_img,(WINDOWWIDTH,WINDOWHEIGHT))
+sbg_img = pygame.image.load('start_display.png')
+sbg_img = pygame.transform.scale(sbg_img,(WINDOWWIDTH,WINDOWHEIGHT))
+ebg_img = pygame.image.load('gameover.png')
+ebg_img = pygame.transform.scale(ebg_img,(WINDOWWIDTH,WINDOWHEIGHT))
+sbbg_image = pygame.image.load('start_button.png').convert_alpha()
+ebbg_image = pygame.image.load('quit_button.png').convert_alpha()
+ibbg_image = pygame.image.load('inst_button.png').convert_alpha()
+rbbg_image = pygame.image.load('replay.png').convert_alpha()
+hbbg_image = pygame.image.load('home_screen.png').convert_alpha()
+gbbg_image = pygame.image.load('go_back.png').convert_alpha()
+woosh = pygame.mixer.Sound('woosh.mp3')
+musicList =['start_music.mp3']
+pygame.mixer.music.load(musicList[0])
+
+
+     
+
+class Bubble(pygame.sprite.Sprite):
+    def __init__(self, color, row=0, column=0):
+        pygame.sprite.Sprite.__init__(self)
+
+        self.rect = pygame.Rect(0, 0, 30, 30)
+        self.rect.centerx = STARTX
+        self.rect.centery = STARTY
+        self.speed = 10
+        self.color = color
+        self.radius = BUBBLERADIUS
+        self.angle = 0
+        self.row = row
+        self.column = column
+        
+    def update(self):
+
+        if self.angle == 90:
+            xmove = 0
+            ymove = self.speed * -1
+        elif self.angle < 90:
+            xmove = self.xcalculate(self.angle)
+            ymove = self.ycalculate(self.angle)
+        elif self.angle > 90:
+            xmove = self.xcalculate(180 - self.angle) * -1
+            ymove = self.ycalculate(180 - self.angle)
+        
+
+        self.rect.x += xmove 
+        self.rect.y += ymove
+
+
+    def draw(self):
+        pygame.gfxdraw.filled_circle(DISPLAYSURF, self.rect.centerx, self.rect.centery, self.radius, self.color)
+        pygame.gfxdraw.aacircle(DISPLAYSURF, self.rect.centerx, self.rect.centery, self.radius, GRAY)
+        #graphically the circle gets formed.
+
+
+    def xcalculate(self, angle):#Calculation of angle in whichthe ball is thrown(X-axis).
+        radians = math.radians(angle)
+        
+        xmove = math.cos(radians)*(self.speed)
+        return xmove
+
+    def ycalculate(self, angle):#Calculation of angle in whichthe ball is thrown(Y-axis).
+        radians = math.radians(angle)
+        
+        ymove = math.sin(radians)*(self.speed) * -1
+        return ymove
+
+
+class Arrow(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+
+        self.angle = 90
+        arrowImage = pygame.image.load('arr_fin1.png')
+        arrowImage.convert_alpha()
+        arrowRect = arrowImage.get_rect()
+        self.image = arrowImage
+        self.transformImage = self.image
+        self.rect = arrowRect
+    
+        self.rect.centerx = STARTX       
+        self.rect.centery = STARTY
+        
+
+
+    def update(self, direction):
+        
+        if direction == LEFT and self.angle < 170:
+            self.angle += 1
+        elif direction == RIGHT and self.angle > 10:        
+            self.angle -= 1
+
+        self.transformImage = pygame.transform.rotate(self.image, self.angle)
+        self.rect = self.transformImage.get_rect()
+        self.rect.centerx = STARTX 
+        self.rect.centery = STARTY
+
+        
+    def draw(self):
+        DISPLAYSURF.blit(self.transformImage, self.rect)
+
+
+class Score(object):
+    def __init__(self):
+        self.total = 0
+        self.font = pygame.font.SysFont('vivaldi', 40)
+        self.render = self.font.render('Score: ' + str(self.total), True,WHITE)
+        self.rect = self.render.get_rect()
+        self.rect.left = 50
+        self.rect.bottom = WINDOWHEIGHT-5
+        
+        
+    def update(self, deleteList):
+        self.total += ((len(deleteList)) * 10)
+        self.render = self.font.render('Score: ' + str(self.total), True, WHITE)
+
+    def draw(self):
+        DISPLAYSURF.blit(self.render, self.rect)
+
+
+class Button():
+	def __init__(self, x, y, image, scale):
+		width = image.get_width()
+		height = image.get_height()
+		self.image = pygame.transform.scale(image, (int(width * scale), int(height * scale)))
+		self.rect = self.image.get_rect()
+		self.rect.topleft = (x, y)
+		self.clicked = False
+
+	def draw(self,surface):
+		action = False
+		#get mouse position
+		pos = pygame.mouse.get_pos()
+
+		#check mouseover and clicked conditions
+		if self.rect.collidepoint(pos):
+            
+			if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
+				self.clicked = True
+				action = True
+
+		if pygame.mouse.get_pressed()[0] == 0:
+			self.clicked = False
+
+		#draw button on screen
+		surface.blit(self.image, (self.rect.x, self.rect.y))
+
+		return action
+
+
+def highestScore():
+    with open("highscore.txt","r") as f:
+        return f.read()
+
+
+def main():
+    global FPSCLOCK, DISPLAYSURF, DISPLAYRECT
+    pygame.init()
+    FPSCLOCK = pygame.time.Clock()
+    pygame.display.set_caption('Bouncing Ball')
+    DISPLAYSURF, DISPLAYRECT = makeDisplay()
+    pygame.mixer.music.play()
+    try:
+        high_score = int(highestScore())
+    except:
+        high_score = 0
+
+    i = 0
+    while True:  
+        if(i<1):
+            start_display()
+            i+=1
+        score, winorlose = runGame()
+        if high_score < score:
+            high_score = score
+        with open("highscore.txt","w") as f:
+            f.write(str(high_score))
+        endScreen(score, winorlose)
+
+
+def runGame():
+    musicList =['bg_music.mp3']
+    pygame.mixer.music.load(musicList[0])
+    pygame.mixer.music.play()
+    track = 0
+    gameColorList = copy.deepcopy(COLORLIST)
+
+    direction = None
+    launchBubble = False
+    newBubble = None
+    
+    
+    arrow = Arrow()
+    bubbleArray = makeBlankBoard()
+    setBubbles(bubbleArray, gameColorList)
+    
+    nextBubble = Bubble(gameColorList[0])
+    nextBubble.rect.right = WINDOWWIDTH - 5
+    nextBubble.rect.bottom = WINDOWHEIGHT - 5
+
+    score = Score()
+    q_button = Button(5,430,ebbg_image,0.2)
+    while True:
+        window.blit(bg_img, (0, 0))
+
+        pygame.gfxdraw.hline(DISPLAYSURF,0,720,389,BLACK)
+        pygame.gfxdraw.hline(DISPLAYSURF,0,720,390,BLACK)   
+        if q_button.draw(window) == True:
+            woosh.play()
+            terminate()
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                terminate() 
+            elif event.type == KEYDOWN:
+                if (event.key == K_LEFT):
+                    direction = LEFT
+                elif (event.key == K_RIGHT):
+                    direction = RIGHT
+                    
+            elif event.type == KEYUP:
+                direction = None
+                if event.key == K_SPACE:
+                        launchBubble = True
+                elif event.key == K_ESCAPE:
+                        terminate()
+
+        if launchBubble == True:
+            if newBubble == None:
+                newBubble = Bubble(nextBubble.color)
+                newBubble.angle = arrow.angle
+                
+
+            newBubble.update()
+            newBubble.draw()
+            
+            
+            if newBubble.rect.right >= WINDOWWIDTH - 5:
+                newBubble.angle = 180 - newBubble.angle
+            elif newBubble.rect.left <= 5:
+                newBubble.angle = 180 - newBubble.angle
+
+
+            launchBubble, newBubble, score = stopBubble(bubbleArray, newBubble, launchBubble, score)
+
+            finalBubbleList = []
+            for row in range(len(bubbleArray)):
+                for column in range(len(bubbleArray[0])):
+                    if bubbleArray[row][column] != BLANK:
+                        finalBubbleList.append(bubbleArray[row][column])
+                        if bubbleArray[row][column].rect.bottom > (WINDOWHEIGHT - arrow.rect.height - 10):
+                            return score.total, 'lose'
+
+            
+            
+            if len(finalBubbleList) < 1:
+                return score.total, 'win'
+                                        
+                        
+            
+            gameColorList = updateColorList(bubbleArray)
+            random.shuffle(gameColorList)
+            
+                    
+                            
+            if launchBubble == False:
+                
+                nextBubble = Bubble(gameColorList[0])
+                nextBubble.rect.right = WINDOWWIDTH - 5
+                nextBubble.rect.bottom = WINDOWHEIGHT - 5
+
+        
+        
+                            
+        nextBubble.draw()
+        if launchBubble == True:
+            coverNextBubble()
+        
+        arrow.update(direction)
+        arrow.draw()
+
+
+        
+        setArrayPos(bubbleArray)
+        drawBubbleArray(bubbleArray)
+        score.draw()
+
+        if pygame.mixer.music.get_busy() == False:
+            if track == len(musicList) - 1:
+                track = 0
+            else:
+                track += 1
+
+            pygame.mixer.music.load(musicList[track])
+            pygame.mixer.music.play()
+        
+        
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def makeBlankBoard():
+    array = []
+    for row in range(ARRAYHEIGHT):
+        column = []
+        for i in range(ARRAYWIDTH):
+            column.append(BLANK)
+        array.append(column)
+
+    return array
+
+
+def setBubbles(array, gameColorList):
+    for row in range(BUBBLELAYERS):
+        for column in range(len(array[row])):
+            random.shuffle(gameColorList)
+            newBubble = Bubble(gameColorList[0], row, column)
+            array[row][column] = newBubble 
+            
+    setArrayPos(array)
+
+
+def setArrayPos(array):
+    for row in range(ARRAYHEIGHT):
+        for column in range(len(array[row])):
+            if array[row][column] != BLANK:
+                array[row][column].rect.x = (BUBBLEWIDTH * column)# + 5
+                array[row][column].rect.y = (BUBBLEWIDTH * row)# + 5
+
+    for row in range(1, ARRAYHEIGHT, 2):
+        for column in range(len(array[row])):
+            if array[row][column] != BLANK:
+                array[row][column].rect.x += BUBBLERADIUS
+                
+
+    for row in range(1, ARRAYHEIGHT):
+        for column in range(len(array[row])):
+            if array[row][column] != BLANK:
+                array[row][column].rect.y -= (BUBBLEYADJUST * row)
+
+    deleteExtraBubbles(array)
+
+
+def deleteExtraBubbles(array):
+    #removes the extra bubbles which are beneath the shooted bubble.
+    for row in range(ARRAYHEIGHT):
+        for column in range(len(array[row])):
+            if array[row][column] != BLANK:
+                if array[row][column].rect.right > WINDOWWIDTH:
+                    array[row][column] = BLANK
+
+
+def updateColorList(bubbleArray):
+    newColorList = []
+
+    for row in range(len(bubbleArray)):
+        for column in range(len(bubbleArray[0])):
+            if bubbleArray[row][column] != BLANK:
+                newColorList.append(bubbleArray[row][column].color)
+
+    colorSet = set(newColorList)
+
+    if len(colorSet) < 1:
+        colorList = []
+        colorList.append(WHITE)
+        return colorList
+
+    else:
+
+        return list(colorSet)
+    
+
+def checkForFloaters(bubbleArray):#?
+    bubbleList = [column for column in range(len(bubbleArray[0])) if bubbleArray[0][column] != BLANK]
+
+    newBubbleList = []
+
+    for i in range(len(bubbleList)):
+        if i == 0:
+            newBubbleList.append(bubbleList[i])
+        elif bubbleList[i] > bubbleList[i - 1] + 1:
+            newBubbleList.append(bubbleList[i])
+
+    copyOfBoard = copy.deepcopy(bubbleArray)
+
+    for row in range(len(bubbleArray)):
+        for column in range(len(bubbleArray[0])):
+            bubbleArray[row][column] = BLANK
+    
+
+    for column in newBubbleList:
+        popFloaters(bubbleArray, copyOfBoard, column)
+
+
+def popFloaters(bubbleArray, copyOfBoard, column, row=0):
+    if (row < 0 or row > (len(bubbleArray)-1)
+                or column < 0 or column > (len(bubbleArray[0])-1)):
+        return
+    
+    elif copyOfBoard[row][column] == BLANK:
+        return
+
+    elif bubbleArray[row][column] == copyOfBoard[row][column]:
+        return
+
+    bubbleArray[row][column] = copyOfBoard[row][column]
+    
+
+    if row == 0:
+        popFloaters(bubbleArray, copyOfBoard, column + 1, row    )
+        popFloaters(bubbleArray, copyOfBoard, column - 1, row    )
+        popFloaters(bubbleArray, copyOfBoard, column,     row + 1)
+        popFloaters(bubbleArray, copyOfBoard, column - 1, row + 1)
+
+    elif row % 2 == 0:
+        popFloaters(bubbleArray, copyOfBoard, column + 1, row    )
+        popFloaters(bubbleArray, copyOfBoard, column - 1, row    )
+        popFloaters(bubbleArray, copyOfBoard, column,     row + 1)
+        popFloaters(bubbleArray, copyOfBoard, column - 1, row + 1)
+        popFloaters(bubbleArray, copyOfBoard, column,     row - 1)
+        popFloaters(bubbleArray, copyOfBoard, column - 1, row - 1)
+
+    else:
+        popFloaters(bubbleArray, copyOfBoard, column + 1, row    )
+        popFloaters(bubbleArray, copyOfBoard, column - 1, row    )
+        popFloaters(bubbleArray, copyOfBoard, column,     row + 1)
+        popFloaters(bubbleArray, copyOfBoard, column + 1, row + 1)
+        popFloaters(bubbleArray, copyOfBoard, column,     row - 1)
+        popFloaters(bubbleArray, copyOfBoard, column + 1, row - 1)
+        
+
+def stopBubble(bubbleArray, newBubble, launchBubble, score):
+    deleteList = []
+    popSound = pygame.mixer.Sound('popcork.ogg')
+    
+    for row in range(len(bubbleArray)):
+        for column in range(len(bubbleArray[row])):
+            
+            if (bubbleArray[row][column] != BLANK and newBubble != None):
+                if (pygame.sprite.collide_rect(newBubble, bubbleArray[row][column])) or newBubble.rect.top < 0:
+                    if newBubble.rect.top < 0:
+                        newRow, newColumn = addBubbleToTop(bubbleArray, newBubble)
+                        
+                    elif newBubble.rect.centery >= bubbleArray[row][column].rect.centery:
+
+                        if newBubble.rect.centerx >= bubbleArray[row][column].rect.centerx:
+                            if row == 0 or (row) % 2 == 0:
+                                newRow = row + 1
+                                newColumn = column
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow - 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                                
+                            else:
+                                newRow = row + 1
+                                newColumn = column + 1
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow - 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                                                    
+                        elif newBubble.rect.centerx < bubbleArray[row][column].rect.centerx:
+                            if row == 0 or row % 2 == 0:
+                                newRow = row + 1
+                                newColumn = column - 1
+                                if newColumn < 0:
+                                    newColumn = 0
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow - 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                            else:
+                                newRow = row + 1
+                                newColumn = column
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow - 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                                
+                            
+                    elif newBubble.rect.centery < bubbleArray[row][column].rect.centery:
+                        if newBubble.rect.centerx >= bubbleArray[row][column].rect.centerx:
+                            if row == 0 or row % 2 == 0:
+                                newRow = row - 1
+                                newColumn = column
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow + 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                            else:
+                                newRow = row - 1
+                                newColumn = column + 1
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow + 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                            
+                        elif newBubble.rect.centerx <= bubbleArray[row][column].rect.centerx:
+                            if row == 0 or row % 2 == 0:
+                                newRow = row - 1
+                                newColumn = column - 1
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow + 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+                                
+                            else:
+                                newRow = row - 1
+                                newColumn = column
+                                if bubbleArray[newRow][newColumn] != BLANK:
+                                    newRow = newRow + 1
+                                bubbleArray[newRow][newColumn] = copy.copy(newBubble)
+                                bubbleArray[newRow][newColumn].row = newRow
+                                bubbleArray[newRow][newColumn].column = newColumn
+
+
+                    popBubbles(bubbleArray, newRow, newColumn, newBubble.color, deleteList)
+                    
+                    
+                    if len(deleteList) >= 3:
+                        for pos in deleteList:
+                            popSound.play()
+                            row = pos[0]
+                            column = pos[1]
+                            bubbleArray[row][column] = BLANK
+                        checkForFloaters(bubbleArray)
+                        
+                        score.update(deleteList)
+
+                    launchBubble = False
+                    newBubble = None
+
+    return launchBubble, newBubble, score
+
+                    
+def addBubbleToTop(bubbleArray, bubble):
+    posx = bubble.rect.centerx
+    leftSidex = posx - BUBBLERADIUS
+
+    columnDivision = math.modf(float(leftSidex) / float(BUBBLEWIDTH))
+    column = int(columnDivision[1])
+
+    if columnDivision[0] < 0.5:
+        bubbleArray[0][column] = copy.copy(bubble)
+    else:
+        column += 1
+        bubbleArray[0][column] = copy.copy(bubble)
+
+    row = 0
+    
+
+    return row, column
+   
+
+def popBubbles(bubbleArray, row, column, color, deleteList):
+    if row < 0 or column < 0 or row > (len(bubbleArray)-1) or column > (len(bubbleArray[0])-1):
+        return
+
+    elif bubbleArray[row][column] == BLANK:
+        return
+    
+    elif bubbleArray[row][column].color != color:
+        return
+
+    for bubble in deleteList:
+        if bubbleArray[bubble[0]][bubble[1]] == bubbleArray[row][column]:
+            return
+
+    deleteList.append((row, column))
+
+    if row == 0:
+        popBubbles(bubbleArray, row,     column - 1, color, deleteList)
+        popBubbles(bubbleArray, row,     column + 1, color, deleteList)
+        popBubbles(bubbleArray, row + 1, column,     color, deleteList)
+        popBubbles(bubbleArray, row + 1, column - 1, color, deleteList)
+
+    elif row % 2 == 0:
+        
+        popBubbles(bubbleArray, row + 1, column,         color, deleteList)
+        popBubbles(bubbleArray, row + 1, column - 1,     color, deleteList)
+        popBubbles(bubbleArray, row - 1, column,         color, deleteList)
+        popBubbles(bubbleArray, row - 1, column - 1,     color, deleteList)
+        popBubbles(bubbleArray, row,     column + 1,     color, deleteList)
+        popBubbles(bubbleArray, row,     column - 1,     color, deleteList)
+
+    else:
+        popBubbles(bubbleArray, row - 1, column,     color, deleteList)
+        popBubbles(bubbleArray, row - 1, column + 1, color, deleteList)
+        popBubbles(bubbleArray, row + 1, column,     color, deleteList)
+        popBubbles(bubbleArray, row + 1, column + 1, color, deleteList)
+        popBubbles(bubbleArray, row,     column + 1, color, deleteList)
+        popBubbles(bubbleArray, row,     column - 1, color, deleteList)     
+
+
+def drawBubbleArray(array):
+    for row in range(ARRAYHEIGHT):
+        for column in range(len(array[row])):
+            if array[row][column] != BLANK:
+                array[row][column].draw()
+
+
+def makeDisplay():
+    DISPLAYSURF = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT))
+    DISPLAYRECT = DISPLAYSURF.get_rect()
+    DISPLAYSURF.fill(BGCOLOR)
+    DISPLAYSURF.convert()
+
+    return DISPLAYSURF, DISPLAYRECT
+
+
+start_button = Button(640,400,sbbg_image,0.8)
+inst_button = Button(660,10,ibbg_image,0.5)
+quit_button = Button(10,10,ebbg_image,0.2)
+replay_button = Button(320,280,rbbg_image,0.3)
+home_button = Button(320,380,hbbg_image,0.3)
+back_button = Button(10,400,gbbg_image,0.28)
+
+def start_display():
+    musicList =['start_music.mp3']
+    pygame.mixer.music.load(musicList[0])
+    pygame.mixer.music.play()
+        
+    while True:
+        window.blit(sbg_img, (0, 0))
+        
+        if start_button.draw(window) == True:
+            woosh.play()
+            return
+        elif inst_button.draw(window) == True:
+            woosh.play()
+            v = instructions()
+            if v == 0:
+                return
+            elif v == 1:
+                v=2
+        elif quit_button.draw(window) == True:
+            woosh.play()
+            terminate()
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                terminate()
+            elif event.type == KEYUP:
+                if event.key == K_RETURN:
+                    woosh.play()
+                    return
+                elif event.key == K_ESCAPE:
+                    terminate()
+        pygame.display.update()    
+
+
+def instructions():
+    window = pygame.display.set_mode((WINDOWWIDTH,WINDOWHEIGHT))
+    ibg_img = pygame.image.load('instructions.png')
+    ibg_img = pygame.transform.scale(ibg_img,(WINDOWWIDTH,WINDOWHEIGHT))
+    musicList =['instructions.mp3']
+    pygame.mixer.music.load(musicList[0])
+    pygame.mixer.music.play()
+        
+
+    while True:
+        window.blit(ibg_img, (0, 0))
+        if start_button.draw(window) == True:
+            woosh.play()
+            return 0
+        if quit_button.draw(window) == True:
+            woosh.play()
+            terminate()
+        if back_button.draw(window) == True:
+            woosh.play()
+            return 1
+
+        for event in pygame.event.get():
+
+
+            if event.type == QUIT:
+                terminate()
+            elif event.type == KEYUP:
+                if event.key == K_RETURN:
+                    woosh.play()
+                    return
+                elif event.key == K_ESCAPE:
+                    terminate()
+        pygame.display.update()
+    
+ 
+def instruction_end():
+    window = pygame.display.set_mode((WINDOWWIDTH,WINDOWHEIGHT))
+    ibg_img = pygame.image.load('instructions.png')
+    ibg_img = pygame.transform.scale(ibg_img,(WINDOWWIDTH,WINDOWHEIGHT))
+    musicList =['instructions.mp3']
+    pygame.mixer.music.load(musicList[0])
+    pygame.mixer.music.play()
+        
+
+    while True:
+        window.blit(ibg_img, (0, 0))
+        if start_button.draw(window) == True:
+            woosh.play()
+            return
+        if quit_button.draw(window) == True:
+            woosh.play()
+            terminate()
+
+        for event in pygame.event.get():
+
+
+            if event.type == QUIT:
+                terminate()
+            elif event.type == KEYUP:
+                if event.key == K_RETURN:
+                    woosh.play()
+                    return
+                elif event.key == K_ESCAPE:
+                    terminate()
+        pygame.display.update()
+    
+ 
+def terminate():
+    #The window and the game terminates.
+    pygame.quit()
+    sys.exit()
+
+
+def coverNextBubble():
+    whiteRect = pygame.Rect(0, 0, BUBBLEWIDTH, BUBBLEWIDTH)
+    whiteRect.bottom = WINDOWHEIGHT
+    whiteRect.right = WINDOWWIDTH
+    pygame.draw.rect(DISPLAYSURF,BGCOLOR, whiteRect)
+
+
+def endScreen(score, winorlose):
+
+    musicList =['game-over.wav']
+    pygame.mixer.music.load(musicList[0])
+    pygame.mixer.music.play()
+
+    endFont = pygame.font.SysFont('bold', 35)
+    endMessage1 = endFont.render('You ' + winorlose + '! Your Score is ' + str(score), True, BLACK)
+    endMessage1Rect = endMessage1.get_rect()
+    endMessage1Rect.center = DISPLAYRECT.center
+
+    high_score = highestScore()
+    endFont1 = pygame.font.SysFont('Showcard Gothic', 30)
+    endMessage2 = endFont1.render('High Score:' + high_score, True, RED)
+    endMessage2Rect = endMessage2.get_rect()
+    endMessage2Rect.centerx = DISPLAYRECT.centerx
+                           
+    window.blit(ebg_img, (0, 0))
+    DISPLAYSURF.blit(endMessage1, endMessage1Rect)
+    DISPLAYSURF.blit(endMessage2, endMessage2Rect)
+    inst1_button = Button(660,10,ibbg_image,0.5)
+
+    while True:
+        if replay_button.draw(window) == True:
+            woosh.play()
+            return
+        if inst1_button.draw(window) == True:
+            woosh.play()
+            instruction_end()
+            return
+        if quit_button.draw(window) == True:
+            woosh.play()
+            terminate()
+        if home_button.draw(window) == True:
+            woosh.play()
+            start_display()
+            return
+        
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                terminate()
+            elif event.type == KEYUP:
+                if event.key == K_RETURN:
+                    woosh.play()
+                    return
+                elif event.key == K_ESCAPE:
+                    terminate()
+        pygame.display.update()
+
+      
+if __name__ == '__main__':
+    main()
